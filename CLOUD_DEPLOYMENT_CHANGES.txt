@@ -1,0 +1,150 @@
+CLOUD DEPLOYMENT UPDATE - COMPLETE CHANGES REFERENCE
+
+File: backend/main.py
+Location: /sessions/wizardly-sharp-gauss/mnt/Crypto Agent/backend/main.py
+Changes:
+1. Line 3: Added "import os"
+2. Line 5: Added "from pathlib import Path"
+3. Line 11: Added "FileResponse" to response imports
+4. Line 12: Added "from fastapi.staticfiles import StaticFiles"
+5. Lines 310-321: Updated CORS middleware to allow '*' in production
+   - Detects RAILWAY_ENVIRONMENT or RENDER env vars
+   - Restricts to localhost in development
+6. Lines 337-346: Added static file serving
+   - Mounts /assets directory from frontend/dist
+   - Adds SPA fallback route that serves index.html
+
+File: frontend/vite.config.js
+Location: /sessions/wizardly-sharp-gauss/mnt/Crypto Agent/frontend/vite.config.js
+Changes:
+1. Added mode parameter to defineConfig
+2. Added base: '/' for production builds
+3. Added build configuration with:
+   - outDir: 'dist'
+   - sourcemap: false
+   - rollupOptions with manualChunks for code splitting
+
+File: frontend/src/hooks/useWebSocket.js
+Location: /sessions/wizardly-sharp-gauss/mnt/Crypto Agent/frontend/src/hooks/useWebSocket.js
+Changes:
+1. Added getWsUrl() function (lines 15-19)
+   - Development: ws://localhost:8000/ws/live
+   - Production: wss://[domain]/ws/live (auto-detected)
+2. Updated connect() to use getWsUrl()
+
+File: frontend/src/hooks/useApi.js
+Location: /sessions/wizardly-sharp-gauss/mnt/Crypto Agent/frontend/src/hooks/useApi.js
+Changes:
+1. Line 4: Changed API_BASE
+   - Development: http://localhost:8000/api
+   - Production: /api (relative URLs)
+
+New Files Created:
+==================
+
+File: railway.toml
+Purpose: Railway platform configuration
+Contains: Build command, start command, health check, environment variables
+
+File: render.yaml
+Purpose: Render platform configuration
+Contains: Build command, start command, health check, persistent disk, environment variables
+
+File: nixpacks.toml
+Purpose: Nixpacks configuration (used by Railway)
+Contains: Python 3.11, Node.js 20, install/build steps
+
+File: Procfile
+Purpose: Heroku/legacy platform support
+Contains: Web process startup command
+
+File: .github/workflows/deploy.yml
+Purpose: CI/CD pipeline
+Contains: Tests on Python 3.10 & 3.11, auto-deploy to Railway on main
+
+File: DEPLOY.md
+Purpose: Comprehensive deployment guide
+Contains: 
+- Step-by-step Railway, Render, Fly.io instructions
+- Environment variables reference
+- Troubleshooting guide
+- Security best practices
+- Post-deployment verification
+- Scaling instructions
+
+Testing the Changes Locally:
+============================
+
+1. Build the frontend:
+   cd frontend && npm run build
+   
+2. Verify dist/ directory created:
+   ls -la frontend/dist/
+
+3. Start backend:
+   uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+4. Access at: http://localhost:8000
+
+The backend now serves:
+- API routes: /api/trades, /api/positions, etc
+- WebSocket: /ws/live
+- Frontend static files: / (serves index.html + assets)
+
+Key Architecture Points:
+========================
+
+Single Service Design:
+- One container runs FastAPI backend
+- Backend serves both API and React frontend
+- No separate frontend server needed
+- No external CDN required
+- Perfect for Railway/Render/Fly.io
+
+URL Resolution:
+Development:
+  - Frontend: http://localhost:5173 (Vite dev server)
+  - API: http://localhost:8000/api (proxied by Vite)
+  - WebSocket: ws://localhost:8000/ws/live
+
+Production:
+  - Frontend: https://your-domain.com (served by backend)
+  - API: https://your-domain.com/api (same backend)
+  - WebSocket: wss://your-domain.com/ws/live (same backend)
+
+Safety & Configuration:
+=======================
+
+All platforms default to:
+- PAPER_TRADING=true (simulated trades)
+- LIVE_TRADING=false (no real trading)
+- DEFAULT_RISK_MODE=LOW_RISK (safest settings)
+- LOG_LEVEL=INFO (standard logging)
+
+To enable live trading:
+1. Set LIVE_TRADING=true in platform dashboard
+2. Add MEXC_API_KEY and MEXC_API_SECRET
+3. Platform auto-restarts with new config
+4. Monitor closely!
+
+Deployment Checklist:
+====================
+
+Before deploying:
+□ All tests pass: make test
+□ Frontend builds: cd frontend && npm run build
+□ Code committed to Git
+□ Pushed to GitHub (public or private)
+□ Choose platform: Railway (easiest) or Render or Fly.io
+
+To deploy:
+□ Follow DEPLOY.md steps for chosen platform
+□ Connect GitHub repo
+□ Set environment variables in dashboard
+□ Monitor build logs
+□ Verify health check passes
+□ Test dashboard access
+□ Check WebSocket connection
+□ Paper trade for 7+ days before going live
+
+All systems ready for production deployment!
