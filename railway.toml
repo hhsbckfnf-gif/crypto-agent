@@ -1,0 +1,16 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r backend/requirements.txt && cd frontend && npm install && npm run build"
+
+[deploy]
+startCommand = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[environments.production.variables]
+PAPER_TRADING = "true"
+LIVE_TRADING = "false"
+DEFAULT_RISK_MODE = "LOW_RISK"
+LOG_LEVEL = "INFO"
