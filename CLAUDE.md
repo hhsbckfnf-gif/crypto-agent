@@ -1,237 +1,33 @@
-��e──────────────────────────────────────────────────────────┘
-                       │ WebSocket / HTTP
-┌──────────────────────▼──────────────────────────────────────┐
-│                   FastAPI Backend                           │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Trading Loop (60s interval)                            │ │
-│  │  1. Fetch market data (MEXC WebSocket)                 │ │
-│  │  2. Calculate technical indicators (RSI, MA, etc)      │ │
-│  │  3. Agent Decision: PROPOSE action + confidence        │ │
-│  │  4. Risk Engine: VALIDATE against all checks           │ │
-│  │  5. If approved: EXECUTE via MEXC API                  │ │
-│  │  6. Log trade, update balance, emit events             │ │
-│  └────────────────────────────────────────────────────────┘ │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Risk Engine (Gatekeeper)                               │ │
-│  │  • Symbol validation (allowlist check)                 │ │
-│  │  • Market data freshness (>30s = reject)               │ │
-│  │  • Daily loss tracking (5% hard limit)                 │ │
-│  │  • Position limits (leverage, count)                   │ │
-│  │  • Cooldown enforcement (30 min between trades)        │ │
-│  │  • Slippage check (bid-ask spread)                     │ │
-│  │  • Confidence threshold by risk profile                │ │
-│  │  • Circuit breaker (5 errors = lockout)                │ │
-│  └────────────────────────────────────────────────────────┘ │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Agent (Decision Maker)                                 │ │
-│  │  • Rule-based: RSI<30(BUY) / RSI>70(SELL)              │ │
-│  │  • Optional AI: OpenAI-powered signals                 │ │
-│  │  • Returns: Action, Position Size, Confidence          │ │
-│  │  • CANNOT set final_decision=EXECUTE                   │ │
-│  └────────────────────────────────────────────────────────┘ │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Paper Trading Simulator                                │ │
-│  │  • Simulates position lifecycle                        │ │
-│  │  • Applies slippage to fills                           │ │
-│  │  • Tracks P&L and liquidations                         │ │
-│  │  • Validates margin requirements                       │ │
-│  └────────────────────────────────────────────────────────┘ │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        │              │              │
-        ▼              ▼              ▼
-    SQLite DB     MEXC API      WebSocket Stream
- (paper trades) (live trading)  (market data)
-```
+# CLAUDE.md - AI Agent Context
 
-## Key Files & Their Purpose
+This file provides AI assistants with critical context about the Crypto Trading Agent project.
 
-```
-Crypto Agent/
-├── backend/                    # FastAPI application
-│   ├── main.py                  # FastAPI app setup
-│   ├── agent.py                  # Trading agent (decision logic)
-│   ├── risk_engine.py            # Risk validation & enforcement
-│   ├── paper_trading.py          # Paper trading simulator
-│   ├── schemas.py                # Pydantic models
-│   ├── mexc_client.py            # MEXC API client
-│   ├── routes/
-│   │   ├── trading.py            # POST /trade, GET /positions
-│   │   ├── dashboard.py          # GET /dashboard, /balance
-│   │   └── admin.py              # GET /health, POST /circuit-reset
-│   ├── database.py               # SQLAlchemy models
-│   └── requirements.txt          # Python dependencies
-│
-├── frontend/                     # React/Vue SPA
-│   ├── src/
-│   │   ├── components/Dashboard.vue
-│   │   ├── pages/
-│   │   │   ├── TradingDashboard.vue
-│   │   │   ├── RiskConfig.vue
-│   │   │   └── TradeHistory.vue
-│   │   └── api/client.ts         # WebSocket + HTTP client
-│   ├── package.json
-│   └── Dockerfile
-│
-├── tests/                        # Comprehensive test suite
-│   ├── test_risk_engine.py       # Risk validation tests
-│   ├── test_agent.py             # Agent decision tests
-│   ├── test_paper_trading.py     # Simulator tests
-│   ├── test_schemas.py           # Pydantic validation
-│   └── conftest.py               # Pytest fixtures
-│
-├── config/
-│   └── risk_profiles.json        # Risk profile definitions
-│
-├── .env.example                  # Environment variables template
-├── docker-compose.yml            # Multi-container orchestration
-├── Makefile                      # Development commands
-├── README.md                     # User documentation
-└── CLAUDE.md                     # This file
-```
+## Project Overview
 
-## Common Development Tasks
+**Crypto Trading Agent** is a production-grade cryptocurrency futures trading system that combines:
+- Rule-based technical analysis (RSI, moving averages)
+- Optional AI-powered decision making
+- Rigorous risk engine for position validation
+- Paper trading simulator for backtesting
+- Web UI for monitoring and control
 
-### Setup New Environment
-```bash
-make setup              # Copy .env.example to .env + install deps
-# Edit .env with your API keys
-```
+The system is designed with safety as the top priority.
 
-### Run in Development Mode
-```bash
-make dev               # Start both backend and frontend
-# Backend: http://localhost:8000
-# Frontend: http://localhost:5173
-# API Docs: http://localhost:8000/docs
-```
+## CRITICAL RULES
 
-### Run Tests
-```bash
-make test              # Run all pytest tests with coverage
-make test-watch        # Run tests in watch mode
-make lint              # Check code quality with ruff
-```
+These rules are non-negotiable and override all other considerations:
 
-### Run with Docker
-```bash
-make docker-up         # Start containers
-make docker-down       # Stop containers
-make docker-logs       # View logs
-```
+1. **PAPER_TRADING=true and LIVE_TRADING=false by default**
+   - Never enable live trading automatically
+   - Live trading requires explicit user approval after validation
 
-## Risk Profiles Reference
+2. **Risk Engine is the AUTHORITY**
+   - Agent proposes (suggests action + confidence)
+    - Risk engine decides (validates against all checks)
+   - Final execution only if ALL checks pass
 
-| Profile | Leverage | Max Positions | Confidence Threshold | Position Size | Use Case |
-|---------|----------|---------------|---------------------|---------------|----------|
-| LOW_RISK | 2x | 1 | 80% | 1% of balance | Learning, stable growth |
-| MID_RISK | 3x | 2 | 65% | 2% of balance | Experienced traders |
-| HIGH_RISK | 5x | 2 | 50% | 3% of balance | Risk-tolerant + strong signals |
-
-## Safety Checklist Before Enabling Live Trading
-
-Before setting `LIVE_TRADING=true`, verify:
-
-1. **Testing**
-   - [ ] Paper trading ran successfully for 7+ days
-   - [ ] Agent signals match your analysis
-   - [ ] All unit tests pass (`make test`)
-   - [ ] Risk engine properly rejects bad signals
-
-2. **Configuration**
-   - [ ] START WITH LOW_RISK profile ONLY
-   - [ ] Test with 0.5-1% of trading capital first
-   - [ ] Set up alerts for large losses
-   - [ ] Daily loss limit verified (<5%)
-   - [ ] Cooldown period tested (30 min minimum)
-
-3. **Account & API**
-   - [ ] MEXC account created with testnet API key
-   - [ ] Live API key stored securely in .env (NOT in code)
-   - [ ] API secret never shared or logged
-   - [ ] IP whitelist configured on MEXC
-
-4. **Monitoring**
-   - [ ] Dashboard running and accessible
-   - [ ] Log file configured and rotating
-   - [ ] Alerts configured for:
-       - Consecutive errors (circuit breaker)
-       - Large losses (>2% daily)
-       - Liquidation risks
-       - High slippage conditions
-
-5. **Emergency Procedures**
-   - [ ] Know how to manually close all positions
-   - [ ] Know how to reset circuit breaker
-   - [ ] Have MEXC account password backup
-   - [ ] Have kill-switch (LIVE_TRADING=false) ready
-
-6. **Manual Run-Through**
-   - [ ] Test market data collection
-   - [ ] Test position opening (paper)
-   - [ ] Test position closing (paper)
-   - [ ] Test liquidation mechanics
-   - [ ] Test circuit breaker activation
-
-## API Endpoints Reference
-
-```
-# Trading
-POST   /api/trade              # Manual trade with agent proposal
-GET    /api/positions          # Get open positions
-POST   /api/positions/{id}     # Close position
-GET    /api/history            # Get trade history
-
-# Dashboard
-GET    /api/dashboard          # Dashboard data (balance, chart, etc)
-GET    /api/balance            # Current balance
-GET    /api/market/{symbol}    # Market data for symbol
-
-# Admin
-GET    /health                 # Health check
-POST   /admin/circuit-reset    # Reset circuit breaker
-GET    /admin/config           # Current config
-POST   /admin/config           # Update risk profile
-
-# WebSocket
-WS     /ws                     # Real-time updates (balance, fills, etc)
-```
-
-## Debugging Tips
-
-**Agent never trades:**
-- Check RSI values in dashboard
-- Verify signal generation in logs
-- Increase confidence threshold for testing
-
-**Risk engine rejects all trades:**
-- Check LIVE_TRADING setting
-- Verify market data freshness
-- Check daily loss tracking
-- Verify symbol in ALLOWED_SYMBOLS
-
-**Liquidations happening too often:**
-- Reduce leverage for risk profile
-- Tighten stop loss percentage
-- Check slippage on exchange
-- Verify mark price calculation
-
-**Circuit breaker activated:**
-- Check error logs for root cause
-- Fix underlying issue
-- Reset with POST /admin/circuit-reset
-- Monitor for recurrence
-
-## Contact & Support
-
-For issues:
-1. Check logs in `/app/logs/trading.log 
-2. Review error in dashboard UI
-3. Check CLAUDE.md troubleshooting section
-4. Run `make test` to verify system health
-
-Never disable safety checks to "make it trade faster". The risk engine exists for a reason.
+3. **Safety First Principles**
+   - NO martingale strategies (never increase position to recover losses)
+   - NO averaging down (never add to losing positions)
+   - NO revenge trading (emotions cause losses)
+   - If uncertain -> DO NOTHING (HOLD action)
